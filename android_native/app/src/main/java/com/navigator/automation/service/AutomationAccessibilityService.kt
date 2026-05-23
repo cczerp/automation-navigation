@@ -3,9 +3,14 @@ package com.navigator.automation.service
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Path
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Handler
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.navigator.automation.engine.Sequence
@@ -89,7 +94,37 @@ class AutomationAccessibilityService : AccessibilityService() {
         return tapCoords(rect.exactCenterX(), rect.exactCenterY())
     }
 
+    private fun flashTapIndicator(x: Float, y: Float) {
+        val size = (resources.displayMetrics.density * 40).toInt()
+        val dot = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(180, 160, 90, 220))
+            }
+        }
+        val params = WindowManager.LayoutParams(
+            size, size,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            android.graphics.PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = android.view.Gravity.TOP or android.view.Gravity.LEFT
+            this.x = (x - size / 2).toInt()
+            this.y = (y - size / 2).toInt()
+        }
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        Handler(mainLooper).post {
+            try {
+                wm.addView(dot, params)
+                Handler(mainLooper).postDelayed({ try { wm.removeView(dot) } catch (_: Exception) {} }, 400)
+            } catch (_: Exception) {}
+        }
+    }
+
     fun tapCoords(x: Float, y: Float): Boolean {
+        flashTapIndicator(x, y)
         val path = Path().apply { moveTo(x, y); lineTo(x + 1f, y) }
         val stroke = GestureDescription.StrokeDescription(path, 0, 100)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()

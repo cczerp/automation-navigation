@@ -72,7 +72,6 @@ class SequenceEngine(
 
                 emit(RunState.RUNNING, step = idx, message = step.label())
                 runStep(svc, step)
-                delay(sequence.stepDelayMs)
             }
 
             if (totalLoops > 0 && iteration >= totalLoops) break
@@ -87,6 +86,7 @@ class SequenceEngine(
     private suspend fun runStep(svc: AutomationAccessibilityService, step: Step) {
         when (step) {
             is Step.TapText -> {
+                if (step.delayMs > 0) delay(step.delayMs)
                 withContext(Dispatchers.Default) {
                     val node = retryFind(svc, step.text)
                     if (node != null) svc.tapNode(node)
@@ -109,9 +109,15 @@ class SequenceEngine(
                 }
             }
 
-            is Step.WaitSeconds -> delay((step.seconds * 1000).toLong())
+            is Step.WaitSeconds -> {
+                delay((step.seconds * 1000).toLong())
+                if (step.delayMs > 0) delay(step.delayMs)
+            }
 
-            is Step.TypeText -> withContext(Dispatchers.Default) { svc.typeText(step.text) }
+            is Step.TypeText -> withContext(Dispatchers.Default) {
+                if (step.delayMs > 0) delay(step.delayMs)
+                svc.typeText(step.text)
+            }
 
             is Step.Swipe -> withContext(Dispatchers.Default) {
                 if (step.delayMs > 0) delay(step.delayMs)
@@ -124,6 +130,7 @@ class SequenceEngine(
             }
 
             is Step.PressKey -> withContext(Dispatchers.Default) {
+                if (step.delayMs > 0) delay(step.delayMs)
                 when (step.key.lowercase()) {
                     "back"   -> svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
                     "home"   -> svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
@@ -136,12 +143,13 @@ class SequenceEngine(
             }
 
             is Step.LaunchApp -> {
+                if (step.delayMs > 0) delay(step.delayMs)
                 withContext(Dispatchers.Default) { svc.launchApp(step.target) }
                 delay(3500) // let the app finish loading before next step
             }
 
             is Step.TapWhen -> {
-                // Poll for the specified text until it appears or timeout
+                if (step.delayMs > 0) delay(step.delayMs)
                 val deadline = System.currentTimeMillis() + step.timeoutSeconds * 1_000L
                 while (System.currentTimeMillis() < deadline && !stopped) {
                     val node = withContext(Dispatchers.Default) { svc.findNodeByText(step.text) }
@@ -154,7 +162,7 @@ class SequenceEngine(
             }
 
             is Step.WatchCorners -> {
-                // Scan for dismiss UI for up to timeoutSeconds
+                if (step.delayMs > 0) delay(step.delayMs)
                 val deadline = System.currentTimeMillis() + step.timeoutSeconds * 1_000L
                 var found = false
                 while (System.currentTimeMillis() < deadline && !stopped) {
@@ -167,12 +175,12 @@ class SequenceEngine(
                     delay(500)
                 }
                 if (!found) {
-                    // Fallback: try pressing back
                     svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
                 }
             }
 
             is Step.DismissAd -> {
+                if (step.delayMs > 0) delay(step.delayMs)
                 withContext(Dispatchers.Default) {
                     val node = svc.findDismissNode()
                     if (node != null) svc.tapNode(node)
@@ -181,6 +189,7 @@ class SequenceEngine(
             }
 
             is Step.CheckBranch -> {
+                if (step.delayMs > 0) delay(step.delayMs)
                 val triggered = withContext(Dispatchers.Default) {
                     svc.findNodeByText(step.triggerText) != null
                 }
@@ -189,7 +198,6 @@ class SequenceEngine(
                     if (branch != null) {
                         val branchEngine = SequenceEngine(context, branch, scope)
                         branchEngine.start()
-                        // Wait for branch to finish
                         while (branchEngine.status.value.state == RunState.RUNNING ||
                                branchEngine.status.value.state == RunState.PAUSED) {
                             delay(300)
@@ -198,11 +206,15 @@ class SequenceEngine(
                 }
             }
 
-            Step.PressBack ->
+            is Step.PressBack -> {
+                if (step.delayMs > 0) delay(step.delayMs)
                 svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+            }
 
-            Step.PressHome ->
+            is Step.PressHome -> {
+                if (step.delayMs > 0) delay(step.delayMs)
                 svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)
+            }
         }
     }
 
